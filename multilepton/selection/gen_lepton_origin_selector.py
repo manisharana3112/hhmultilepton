@@ -1,9 +1,11 @@
-import awkward as ak
-import numpy as np
-
-from columnflow import selector, Selector, SelectionResult
 from columnflow.util import maybe_import
-from multilepton.columnflow.utils import set_ak_column
+
+ak = maybe_import("awkward")
+np = maybe_import("numpy")
+
+from columnflow.selection import selector, Selector, SelectionResult
+from columnflow.util import maybe_import
+from columnflow.columnar_util import set_ak_column
 
 vector = maybe_import("vector")
 
