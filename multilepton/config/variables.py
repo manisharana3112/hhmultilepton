@@ -21,7 +21,7 @@ def add_variables(config: od.Config) -> None:
         config,
         name="event",
         expression="event",
-        binning=(1, 0.0, 1.0e9),
+        binning=(1, 100000.0, 1000000.0),
         x_title="Event number",
         discrete_x=True,
     )
