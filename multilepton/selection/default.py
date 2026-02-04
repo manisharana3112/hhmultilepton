@@ -32,6 +32,7 @@ from columnflow.types import Iterable
 from multilepton.selection.trigger_multilepton import trigger_selection
 from multilepton.selection.lepton_multilepton import lepton_selection
 from multilepton.selection.jet_multilepton import jet_selection
+from multilepton.selection.gen_lepton_origin_selector import gen_dihiggs_selector
 import multilepton.production.processes as process_producers
 from multilepton.production.btag import btag_weights_deepjet, btag_weights_pnet
 from multilepton.production.features import cutflow_features
@@ -83,12 +84,13 @@ def get_bad_events(self: Selector, events: ak.Array) -> ak.Array:
 @selector(
     uses={
         json_filter, met_filters, IF_RUN_3(jet_veto_map), trigger_selection, lepton_selection, jet_selection,
+        gen_dihiggs_selector,
         mc_weight, pu_weight, ps_weights, btag_weights_deepjet, IF_RUN_3(btag_weights_pnet), process_ids,
         cutflow_features, attach_coffea_behavior, patch_ecalBadCalibFilter,
         IF_DATASET_HAS_LHE_WEIGHTS(pdf_weights, murmuf_weights),
     },
     produces={
-        trigger_selection, lepton_selection, jet_selection, mc_weight, pu_weight, ps_weights, btag_weights_deepjet,
+        trigger_selection, lepton_selection, jet_selection, gen_dihiggs_selector, mc_weight, pu_weight, ps_weights, btag_weights_deepjet,
         process_ids, cutflow_features, IF_RUN_3(btag_weights_pnet),
         IF_DATASET_HAS_LHE_WEIGHTS(pdf_weights, murmuf_weights),
     },
@@ -152,6 +154,9 @@ def default(
     # mc-only functions
     if self.dataset_inst.is_mc:
         events = self[mc_weight](events, **kwargs)
+
+        # gen level selection
+        events, gen_results = self[gen_dihiggs_selector](events, **kwargs)
 
         # pdf weights
         if self.has_dep(pdf_weights):
