@@ -43,6 +43,21 @@ def add_variables(config: od.Config) -> None:
     )
     add_variable(
         config,
+        name="mHH_gen",
+        expression="mHH_gen",
+        binning=(50, 0, 1500),
+        x_title="Gen $m_{HH}$",
+        unit="GeV",
+    )
+    add_variable(
+        config,
+        name="nFromDiHiggs",
+        expression="nFromDiHiggs",
+        binning=(6, -0.5, 5.5),
+        x_title="Leptons from DiHiggs",
+    )
+    add_variable(
+        config,
         name="n_hhbtag",
         expression="n_hhbtag",
         binning=(4, -0.5, 3.5),
