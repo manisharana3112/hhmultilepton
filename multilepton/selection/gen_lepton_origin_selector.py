@@ -17,8 +17,6 @@ vector = maybe_import("vector")
     },
     produces={
         "lep_isPrompt",
-        "lep_isFromHiggs",
-        "lep_isFromTau",
         "lep_isUnmatched",
         "nFromDiHiggs",
         "mHH_gen",
@@ -74,39 +72,8 @@ def gen_dihiggs_selector(self, events, lepton_results, **kwargs):
     # 2. Reconstruct the concatenated columns (Backward Compatibility / Original Output)
     # Order: Electron -> Muon -> Tau
     lep_isPrompt = ak.concatenate([ele_isPrompt, mu_isPrompt, tau_isPrompt], axis=1)
-    lep_isFromHiggs = ak.concatenate([ele_isFromHiggs, mu_isFromHiggs, tau_isFromHiggs], axis=1)
-    lep_isFromTau = ak.concatenate([ele_isFromTau, mu_isFromTau, tau_isFromTau], axis=1)
     lep_isUnmatched = ak.concatenate([events.Electron.genPartIdx < 0, events.Muon.genPartIdx < 0, events.Tau.genPartIdx < 0], axis=1)
 
-    # 3. Calculate Event-Level Flags (if lepton_results is present)
-    # Be careful not to overwrite the Per-Lepton arrays variable names if needed, 
-    # but here we are producing new columns "lep_isPrompt" (Event Level) which might conflict with the produced column name above?
-    # Wait, the user asked to add "lep_isPrompt" to variables.py as an EVENT level variable.
-    # But the produces={} list above has "lep_isPrompt". 
-    # Usually "lep_isPrompt" (concatenated) is a jagged array of booleans. columnflow handles this fine.
-    # If we want an *Event Level* boolean, we must name it differently/reuse carefully.
-    # The 'variables.py' entry I added was `name="lep_isPrompt"`. 
-    # If I overwrite the column "lep_isPrompt" with a single boolean per event, I lose the per-lepton info.
-    # HOWEVER, the User explicitly asked for "lep_isPrompt" and "lep_isUnmatched" variables.
-    # If the user wants to cut on "event is prompt", they usually want a single boolean.
-    # BUT, if they plot it, they might want per-lepton.
-    # Given the previous context "splitting leptons into fakes and non fakes based on the channels",
-    # I will create specific Event-Level columns and maybe overwrite `lep_isPrompt` IF the user intends it to be the event flag.
-    # BUT standard practice is to keep `lep_` as jagged.
-    # I will OVERWRITE `lep_isPrompt` with the EVENT-LEVEL flag since the user defined it with `discrete_x=True` and `binning=(2, -0.5, 1.5)`, which implies a single value per event (0 or 1).
-    # If I overwrite it, I lose per-lepton info. 
-    # Actually, the user's variables.py entry `lep_isPrompt` has `x_title="Prompt Lepton (Event)"`.
-    # This strongly suggests they want the Event-Level flag in that variable.
-    # I will produce TWO sets of columns:
-    # 1. `lep_isPrompt_perLep` (Jagged) - optional, or just don't save it if not needed?
-    #    The selector `produces` list has `lep_isPrompt`.
-    #    I will assume the selector wants to output the EVENT LEVEL flag now based on the variable definition.
-
-    # Let's check the logic:
-    # If I change `lep_isPrompt` to be event-level (flat), any downstream task expecting jagged array will fail.
-    # But the user specifically asked for this variable change.
-    # Use caution: I will save the event-level flag as `lep_isPrompt`.
-    
     if lepton_results:
         # Get selected indices
         sel_ele = lepton_results.objects.Electron.Electron
@@ -142,36 +109,39 @@ def gen_dihiggs_selector(self, events, lepton_results, **kwargs):
         
         event_is_unmatched = ak.any(sel_ele_un, axis=1) | ak.any(sel_mu_un, axis=1) | ak.any(sel_tau_un, axis=1)
         
-        # From Higgs / From Tau
-        event_is_higgs = ak.any(ele_isFromHiggs[sel_ele], axis=1) | ak.any(mu_isFromHiggs[sel_mu], axis=1) | ak.any(tau_isFromHiggs[sel_tau], axis=1)
-        event_is_tau = ak.any(ele_isFromTau[sel_ele], axis=1) | ak.any(mu_isFromTau[sel_mu], axis=1) | ak.any(tau_isFromTau[sel_tau], axis=1)
-
         # Overwrite the output variables with Event-Level BOLEANS (as requested by variable definition)
         lep_isPrompt = event_is_prompt
         lep_isUnmatched = event_is_unmatched
-        lep_isFromHiggs = event_is_higgs
-        lep_isFromTau = event_is_tau
 
-    # 4. Di-Higgs Reconstruction (Standard)
-    higgses = gen[abs(gen.pdgId) == 25]
-    has_dihiggs = ak.num(higgses, axis=1) >= 2
-    h_pairs = ak.pad_none(higgses, 2)
-    mHH_gen = (h_pairs[:, 0] + h_pairs[:, 1]).mass
-    mHH_gen = ak.fill_none(mHH_gen, -999.0)
+    # 4. Di-Higgs Reconstruction (Leptons -> Higgs -> HH)
+    # This logic identifies all final products (leptons, neutrinos, quarks) 
+    # that originate from Higgs bosons (PDG 25).
+    gen_idx = ak.local_index(gen)
+    _, p_is_from_h, _ = get_origin_flags(gen_idx)
     
-    # nFromDiHiggs (This is tricky - usually counts total leptons from higgs in event)
-    # We will keep the original "per-lepton" based counting for this one?
-    # "lep_isFromDiHiggs" was derived from "lep_isFromHiggs & has_dihiggs".
-    # Since I overwrote lep_isFromHiggs with event-level, I need the jagged one again.
-    # Re-calculate jagged for this specific calculation
-    lep_isFromHiggs_jagged = ak.concatenate([ele_isFromHiggs, mu_isFromHiggs, tau_isFromHiggs], axis=1)
-    lep_isFromDiHiggs = lep_isFromHiggs_jagged & has_dihiggs
-    nFromDiHiggs = ak.sum(lep_isFromDiHiggs, axis=1)
+    # Terminal products: isLastCopy (bit 13)
+    is_terminal = (gen.statusFlags & (1 << 13)) > 0
+    
+    # Selection of products from Higgs decay chain (WWWW channel)
+    is_lep = (abs(gen.pdgId) == 11) | (abs(gen.pdgId) == 13) | (abs(gen.pdgId) == 15)
+    is_neu = (abs(gen.pdgId) == 12) | (abs(gen.pdgId) == 14) | (abs(gen.pdgId) == 16)
+    is_quark = (abs(gen.pdgId) >= 1) & (abs(gen.pdgId) <= 5)
+    
+    # Identify gen-leptons from DiHiggs for calculation
+    gen_leps_from_h = gen[is_from_h & is_terminal & is_lep]
+    
+    # Reconstruct HH from all terminal products of Higgses
+    # (leptons + neutrinos + quarks from Higgs chain)
+    gen_hh_products = gen[is_from_h & is_terminal & (is_lep | is_neu | is_quark)]
+    gen_hh = ak.sum(gen_hh_products, axis=1)
+    
+    mHH_gen = ak.fill_none(gen_hh.mass, -999.0)
+    
+    # nFromDiHiggs: count total gen-leptons from Higgses
+    nFromDiHiggs = ak.num(gen_leps_from_h, axis=1)
 
     # 5. Save Columns
     events = set_ak_column(events, "lep_isPrompt", lep_isPrompt)
-    events = set_ak_column(events, "lep_isFromHiggs", lep_isFromHiggs)
-    events = set_ak_column(events, "lep_isFromTau", lep_isFromTau)
     events = set_ak_column(events, "lep_isUnmatched", lep_isUnmatched)
     
     events = set_ak_column(events, "nFromDiHiggs", nFromDiHiggs)
