@@ -156,7 +156,8 @@ def default(
         events = self[mc_weight](events, **kwargs)
 
         # gen level selection
-        events, gen_results = self[gen_dihiggs_selector](events, **kwargs)
+        events, gen_results = self[gen_dihiggs_selector](events, lepton_results, **kwargs)
+        results += gen_results
 
         # pdf weights
         if self.has_dep(pdf_weights):

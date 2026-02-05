@@ -58,6 +58,38 @@ def add_variables(config: od.Config) -> None:
     )
     add_variable(
         config,
+        name="lep_isPrompt",
+        expression="lep_isPrompt",
+        binning=(2, -0.5, 1.5),
+        x_title="Prompt Lepton (Event)",
+        discrete_x=True,
+    )
+    add_variable(
+        config,
+        name="lep_isUnmatched",
+        expression="lep_isUnmatched",
+        binning=(2, -0.5, 1.5),
+        x_title="Unmatched Lepton (Event)",
+        discrete_x=True,
+    )
+    add_variable(
+        config,
+        name="lep_isFromHiggs",
+        expression="lep_isFromHiggs",
+        binning=(2, -0.5, 1.5),
+        x_title="Lepton from Higgs (Event)",
+        discrete_x=True,
+    )
+    add_variable(
+        config,
+        name="lep_isFromTau",
+        expression="lep_isFromTau",
+        binning=(2, -0.5, 1.5),
+        x_title="Lepton from Tau (Event)",
+        discrete_x=True,
+    )
+    add_variable(
+        config,
         name="n_hhbtag",
         expression="n_hhbtag",
         binning=(4, -0.5, 3.5),
