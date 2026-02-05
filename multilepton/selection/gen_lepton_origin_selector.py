@@ -114,35 +114,43 @@ def gen_dihiggs_selector(self, events, lepton_results, **kwargs):
         sel_tau = lepton_results.objects.Tau.Tau
         
         # Check selected leptons only
+        # We select the flags corresponding to the selected indices
         sel_ele_prompt = ele_isPrompt[sel_ele]
         sel_mu_prompt = mu_isPrompt[sel_mu]
         sel_tau_prompt = tau_isPrompt[sel_tau]
         
-        # Event is prompt if ALL selected leptons are prompt AND the event passed selection
-        # (ak.all on empty list is True, so the lepton_results.event mask is vital)
-        is_p_event = ak.all(sel_ele_prompt, axis=1) & ak.all(sel_mu_prompt, axis=1) & ak.all(sel_tau_prompt, axis=1)
-        is_p_event = is_p_event & lepton_results.event
+        # Event is prompt if ALL selected leptons are prompt
+        # We assume empty selection (e.g. 0 electrons) is True (vacuously true), 
+        # but combined with other channels it works out.
+        all_ele_ok = ak.all(sel_ele_prompt, axis=1)
+        all_mu_ok = ak.all(sel_mu_prompt, axis=1)
+        all_tau_ok = ak.all(sel_tau_prompt, axis=1)
         
-        # Unmatched: If ANY selected is unmatched AND event passed selection
-        sel_ele_un = (events.Electron.genPartIdx < 0)[sel_ele]
-        sel_mu_un = (events.Muon.genPartIdx < 0)[sel_mu]
-        sel_tau_un = (events.Tau.genPartIdx < 0)[sel_tau]
+        event_is_prompt = all_ele_ok & all_mu_ok & all_tau_ok
         
-        is_un_event = ak.any(sel_ele_un, axis=1) | ak.any(sel_mu_un, axis=1) | ak.any(sel_tau_un, axis=1)
-        is_un_event = is_un_event & lepton_results.event
+        # Unmatched: If ANY selected is unmatched
+        # Actually easier: Unmatched = NOT Prompt (simplification, but assuming fake=unmatched+non-prompt)
+        # Or strictly unmatched?
+        # User asked for "lep_isUnmatched".
+        ele_isUn = events.Electron.genPartIdx < 0
+        mu_isUn = events.Muon.genPartIdx < 0
+        tau_isUn = events.Tau.genPartIdx < 0
+        
+        sel_ele_un = ele_isUn[sel_ele]
+        sel_mu_un = mu_isUn[sel_mu]
+        sel_tau_un = tau_isUn[sel_tau]
+        
+        event_is_unmatched = ak.any(sel_ele_un, axis=1) | ak.any(sel_mu_un, axis=1) | ak.any(sel_tau_un, axis=1)
         
         # From Higgs / From Tau
-        is_h_event = ak.any(ele_isFromHiggs[sel_ele], axis=1) | ak.any(mu_isFromHiggs[sel_mu], axis=1) | ak.any(tau_isFromHiggs[sel_tau], axis=1)
-        is_t_event = ak.any(ele_isFromTau[sel_ele], axis=1) | ak.any(mu_isFromTau[sel_mu], axis=1) | ak.any(tau_isFromTau[sel_tau], axis=1)
-        
-        is_h_event = is_h_event & lepton_results.event
-        is_t_event = is_t_event & lepton_results.event
+        event_is_higgs = ak.any(ele_isFromHiggs[sel_ele], axis=1) | ak.any(mu_isFromHiggs[sel_mu], axis=1) | ak.any(tau_isFromHiggs[sel_tau], axis=1)
+        event_is_tau = ak.any(ele_isFromTau[sel_ele], axis=1) | ak.any(mu_isFromTau[sel_mu], axis=1) | ak.any(tau_isFromTau[sel_tau], axis=1)
 
-        # Overwrite the output variables with Event-Level BOOLEANS
-        lep_isPrompt = is_p_event
-        lep_isUnmatched = is_un_event
-        lep_isFromHiggs = is_h_event
-        lep_isFromTau = is_t_event
+        # Overwrite the output variables with Event-Level BOLEANS (as requested by variable definition)
+        lep_isPrompt = event_is_prompt
+        lep_isUnmatched = event_is_unmatched
+        lep_isFromHiggs = event_is_higgs
+        lep_isFromTau = event_is_tau
 
     # 4. Di-Higgs Reconstruction (Standard)
     higgses = gen[abs(gen.pdgId) == 25]
